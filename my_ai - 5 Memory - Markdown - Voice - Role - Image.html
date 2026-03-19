@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Master AI</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <style>
+        :root { --primary: #4285f4; --bg: #f0f2f5; --text: #1c1e21; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); display: flex; justify-content: center; padding: 20px; }
+        .chat-card { background: white; width: 100%; max-width: 600px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; height: 90vh; }
+        
+        /* Header & Controls */
+        .header { padding: 15px; background: var(--primary); color: white; display: flex; flex-direction: column; gap: 10px; }
+        select { padding: 5px; border-radius: 4px; border: none; font-size: 0.9em; }
+
+        /* Chat Display */
+        #chat-window { flex: 1; padding: 20px; overflow-y: auto; background: #fff; border-bottom: 1px solid #ddd; }
+        .msg { margin-bottom: 15px; padding: 10px 15px; border-radius: 10px; line-height: 1.5; }
+        .user-msg { background: #e7f3ff; align-self: flex-end; border-left: 4px solid var(--primary); }
+        .ai-msg { background: #f1f0f0; border-left: 4px solid #34a853; }
+        
+        /* Code Block Styling */
+        pre { background: #2d2d2d; color: #ccc; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: monospace; font-weight: bold; }
+
+        /* Input Area */
+        .input-area { padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        input { padding: 12px; border: 1px solid #ddd; border-radius: 8px; outline: none; }
+        .btn-group { display: flex; gap: 10px; }
+        button { flex: 1; padding: 10px; border: none; border-radius: 6px; cursor: pointer; color: white; font-weight: bold; transition: 0.2s; }
+        #send-btn { background: var(--primary); }
+        #voice-btn { background: #34a853; }
+        #clear-btn { background: #ea4335; }
+        button:hover { opacity: 0.9; transform: translateY(-1px); }
+    </style>
+</head>
+<body>
+
+<div class="chat-card">
+    <div class="header">
+        <strong>Gemini 2.5 Flash / 3.0 Pro</strong>
+        <select id="voice-select"><option>Loading voices...</option></select>
+    </div>
+
+    <div id="chat-window">
+        <div class="msg ai-msg">Hello! I am your advanced Gemini Assistant. I have memory of our chat and can speak. Ask me anything!</div>
+    </div>
+
+    <div class="input-area">
+        <input type="text" id="user-input" placeholder="Type a message..." autocomplete="off">
+<input type="file" id="image-input" accept="image/*" style="margin-bottom: 5px;">
+<div id="image-preview" style="display:none; margin-bottom: 10px;">
+    <img id="preview-img" src="" style="max-width: 100px; border-radius: 5px; border: 1px solid #ddd;">
+</div>
+        <div class="btn-group">
+            <button id="send-btn">Send</button>
+            <button id="voice-btn">Speak Answer</button>
+            <button id="clear-btn">Clear</button>
+<button id="download-btn" style="background: #70757a;">Download TXT</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- SETTINGS ---
+    const apiKey = "AIzaSyC2X3kOxU8FR2QIqM5fv9nkYZElFzfUBwU"; // <--- PASTE YOUR KEY HERE
+    const modelName = "gemini-2.5-flash"; // Or "gemini-3-flash" if your list shows it
+    let chatHistory = [];
+    let voices = [];
+
+    // --- DOM ELEMENTS ---
+    const chatWindow = document.querySelector("#chat-window");
+    const userInput = document.querySelector("#user-input");
+    const sendBtn = document.querySelector("#send-btn");
+    const voiceBtn = document.querySelector("#voice-btn");
+    const clearBtn = document.querySelector("#clear-btn");
+    const voiceSelect = document.querySelector("#voice-select");
+
+    // --- VOICE SETUP ---
+    function populateVoices() {
+        voices = window.speechSynthesis.getVoices();
+        voiceSelect.innerHTML = voices
+            .map((v, i) => `<option value="${i}">${v.name} (${v.lang})</option>`)
+            .join('');
+    }
+    populateVoices();
+    if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = populateVoices;
+
+    // --- CORE LOGIC ---
+
+
+async function sendMessage() {
+    const text = userInput.value.trim();
+    const imageInput = document.querySelector("#image-input");
+    const file = imageInput.files[0];
+
+    if (!text && !file) return;
+
+    // 1. Prepare the "Parts" for this message
+    let currentParts = [];
+    if (text) currentParts.push({ text: text });
+    if (file) {
+        const imageData = await fileToGenerativePart(file);
+        currentParts.push(imageData);
+    }
+
+    // 2. Update UI & History
+    appendMessage("user", text || "Sent an image");
+    chatHistory.push({ role: "user", parts: currentParts });
+    
+    // Reset inputs
+    userInput.value = "";
+    imageInput.value = ""; 
+
+    const loadingMsg = appendMessage("ai", "Analyzing...");
+
+    try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+                system_instruction: { parts: [{ text: "You are a helpful assistant who can see and analyze images." }] },
+                contents: chatHistory 
+            })
+        });
+
+        const data = await response.json();
+        const aiText = data.candidates[0].content.parts[0].text;
+        
+        loadingMsg.remove();
+        appendMessage("ai", aiText);
+        chatHistory.push({ role: "model", parts: [{ text: aiText }] });
+
+    } catch (err) {
+        loadingMsg.innerText = "Error: " + err.message;
+    }
+}
+
+    function appendMessage(role, text) {
+        const div = document.createElement("div");
+        div.className = `msg ${role}-msg`;
+        // Use 'marked' for AI responses to handle Markdown
+        div.innerHTML = role === "ai" ? marked.parse(text) : `<b>You:</b> ${text}`;
+        chatWindow.appendChild(div);
+        chatWindow.scrollTop = chatWindow.scrollHeight; // Auto-scroll
+        return div;
+    }
+
+    // --- EVENT LISTENERS ---
+    sendBtn.addEventListener("click", sendMessage);
+    userInput.addEventListener("keypress", (e) => { if(e.key === "Enter") sendMessage(); });
+
+    clearBtn.addEventListener("click", () => {
+        chatHistory = [];
+        chatWindow.innerHTML = '<div class="msg ai-msg">Memory cleared. How can I help?</div>';
+    });
+
+    voiceBtn.addEventListener("click", () => {
+        const lastAiMsg = [...document.querySelectorAll(".ai-msg")].pop();
+        if (!lastAiMsg) return;
+
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(lastAiMsg.innerText);
+        utterance.voice = voices[voiceSelect.value];
+        window.speechSynthesis.speak(utterance);
+    });
+
+async function fileToGenerativePart(file) {
+    const base64EncodedDataPromise = new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.readAsDataURL(file);
+    });
+    return {
+        inline_data: {
+            data: await base64EncodedDataPromise,
+            mime_type: file.type
+        }
+    };
+}
+
+const downloadBtn = document.querySelector("#download-btn");
+
+downloadBtn.addEventListener("click", () => {
+    if (chatHistory.length === 0) {
+        alert("No chat history to download!");
+        return;
+    }
+
+    // 1. Format the history into a nice string
+    let transcript = "--- GEMINI CHAT TRANSCRIPT ---\n\n";
+    
+    chatHistory.forEach(entry => {
+        const role = entry.role === "user" ? "YOU" : "AI";
+        // Get the text part (ignoring images for the text file)
+        const textPart = entry.parts.find(p => p.text);
+        const text = textPart ? textPart.text : "[Image/Media Attachment]";
+        
+        transcript += `${role}:\n${text}\n\n------------------\n\n`;
+    });
+
+    // 2. Create a "Blob" (Binary Large Object) of the text
+    const blob = new Blob([transcript], { type: "text/plain" });
+
+    // 3. Create a secret link and "click" it
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "gemini_chat_history.txt"; // The name of your file
+    
+    // Trigger the download
+    document.body.appendChild(link);
+    link.click();
+    
+    // Clean up
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+});
+
+</script>
+
+</body>
+</html>
