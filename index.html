@@ -7,9 +7,36 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     
     <style>
-        :root { --primary: #4285f4; --bg: #f0f2f5; --text: #1c1e21; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); display: flex; justify-content: center; padding: 20px; }
-        .chat-card { background: white; width: 100%; max-width: 600px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; height: 90vh; }
+
+/* 1. Define Light Colors as defaults */
+:root { 
+    --bg: #f0f2f5; 
+    --card-bg: #ffffff;
+    --text: #1c1e21; 
+    --msg-ai: #f1f0f0;
+    --primary: #4285f4;
+}
+
+/* 2. Define Dark Colors for the .dark-mode class */
+body.dark-mode {
+    --bg: #18191a;
+    --card-bg: #242526;
+    --text: #e4e6eb;
+    --msg-ai: #3a3b3c;
+    --primary: #8ab4f8;
+}
+
+/* 3. Update existing styles to use these variables */
+body { 
+    background: var(--bg); 
+    color: var(--text); 
+    transition: background 0.3s, color 0.3s; /* Smooth transition */
+}
+
+.chat-card { background: var(--card-bg); }
+.ai-msg { background: var(--msg-ai); }
+
+        
         
         /* Header & Controls */
         .header { padding: 15px; background: var(--primary); color: white; display: flex; flex-direction: column; gap: 10px; }
@@ -41,7 +68,11 @@
 <div class="chat-card">
     <div class="header">
         <strong>Gemini 2.5 Flash / 3.0 Pro</strong>
-        <select id="voice-select"><option>Loading voices...</option></select>
+        <select id="voice-select"><option>Loading voices...</option></select>        
+    </div>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+    <strong>Gemini Master AI</strong>
+    <button id="theme-toggle" style="background: none; border: 1px solid white; padding: 2px 8px; font-size: 0.8em; width: auto;">🌙 Dark Mode</button>
     </div>
 
     <div id="chat-window">
@@ -218,6 +249,28 @@ downloadBtn.addEventListener("click", () => {
     // Clean up
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
+});
+
+const themeToggle = document.querySelector("#theme-toggle");
+
+// 1. Check if the user had Dark Mode on before
+if (localStorage.getItem("theme") === "dark") {
+    document.body.classList.add("dark-mode");
+    themeToggle.innerText = "☀️ Light Mode";
+}
+
+// 2. Toggle logic
+themeToggle.addEventListener("click", () => {
+    document.body.classList.toggle("dark-mode");
+    
+    // 3. Save the preference and update button text
+    if (document.body.classList.contains("dark-mode")) {
+        localStorage.setItem("theme", "dark");
+        themeToggle.innerText = "☀️ Light Mode";
+    } else {
+        localStorage.setItem("theme", "light");
+        themeToggle.innerText = "🌙 Dark Mode";
+    }
 });
 
 </script>
